@@ -47,17 +47,22 @@ export default function ProjectWorkspacePage() {
   const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef(chatMessages);
+  messagesRef.current = chatMessages;
 
   const sendMessage = useCallback(async (userMessage: string) => {
-    const newMessages = [...chatMessages, { role: "user" as const, content: userMessage }];
-    setChatMessages(newMessages);
+    const userMsg = { role: "user" as const, content: userMessage };
+    setChatMessages(prev => [...prev, userMsg]);
     setChatLoading(true);
+
+    // Build from ref to avoid stale closure
+    const allMessages = [...messagesRef.current, userMsg];
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, messages: newMessages, mode }),
+        body: JSON.stringify({ projectId, messages: allMessages, mode }),
       });
 
       if (!res.ok) throw new Error("Chat failed");
@@ -67,19 +72,34 @@ export default function ProjectWorkspacePage() {
       let assistantContent = "";
 
       if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          assistantContent += decoder.decode(value, { stream: true });
-          setChatMessages([...newMessages, { role: "assistant", content: assistantContent }]);
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            assistantContent += decoder.decode(value, { stream: true });
+            const content = assistantContent;
+            setChatMessages(prev => {
+              // Replace trailing assistant msg (streaming) or append new one
+              const base = prev.length > 0 && prev[prev.length - 1].role === "assistant"
+                ? prev.slice(0, -1)
+                : prev;
+              return [...base, { role: "assistant" as const, content }];
+            });
+          }
+        } finally {
+          reader.releaseLock();
         }
       }
     } catch (error) {
       console.error("Chat error:", error);
-      setChatMessages([...newMessages, { role: "assistant", content: "Something went wrong. Please try again." }]);
+      setChatMessages(prev => [
+        ...prev,
+        { role: "assistant" as const, content: "Something went wrong. Please try again." },
+      ]);
+    } finally {
+      setChatLoading(false);
     }
-    setChatLoading(false);
-  }, [chatMessages, projectId, mode]);
+  }, [projectId, mode]);
 
   useEffect(() => {
     fetchProject();

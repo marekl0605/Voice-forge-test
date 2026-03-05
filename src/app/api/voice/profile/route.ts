@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const all = req.nextUrl.searchParams.get("all");
+
+    if (all === "true") {
+      const { data, error } = await supabase
+        .from("voice_profiles")
+        .select("id, name, tone, personality_markers, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ profiles: data || [] });
+    }
+
     const { data, error } = await supabase
       .from("voice_profiles")
       .select("*")

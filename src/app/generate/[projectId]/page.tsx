@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContentFormat, ContentStyle } from "@/lib/types";
+import { VoiceProfileSelector } from "@/components/voice-profile-selector";
 
 const FORMATS: { value: ContentFormat; label: string; icon: typeof FileText }[] = [
   { value: "blog", label: "Blog Post", icon: FileText },
@@ -45,6 +46,25 @@ export default function GeneratePage() {
   const [results, setResults] = useState<GeneratedPiece[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [currentFormat, setCurrentFormat] = useState<string | null>(null);
+  const [voiceProfileId, setVoiceProfileId] = useState<string | null>(null);
+
+  // Load project's default voice profile
+  useEffect(() => {
+    async function loadProjectProfile() {
+      const res = await fetch(`/api/projects`);
+      const data = await res.json();
+      const project = data.projects?.find((p: { id: string }) => p.id === projectId);
+      if (project?.voice_profile_id) {
+        setVoiceProfileId(project.voice_profile_id);
+      } else {
+        // Fallback to latest profile
+        const profileRes = await fetch("/api/voice/profile");
+        const profileData = await profileRes.json();
+        if (profileData.profile?.id) setVoiceProfileId(profileData.profile.id);
+      }
+    }
+    loadProjectProfile();
+  }, [projectId]);
 
   const toggleFormat = (format: ContentFormat) => {
     setSelectedFormats((prev) =>
@@ -70,6 +90,7 @@ export default function GeneratePage() {
             format,
             style: selectedStyle,
             summary: summary || undefined,
+            voiceProfileId: voiceProfileId || undefined,
           }),
         });
 
@@ -125,6 +146,7 @@ export default function GeneratePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         project_id: projectId,
+        voice_profile_id: voiceProfileId,
         format: piece.format,
         style: piece.style,
         content: piece.content,
@@ -150,6 +172,7 @@ export default function GeneratePage() {
       body: JSON.stringify(
         unsaved.map((r) => ({
           project_id: projectId,
+          voice_profile_id: voiceProfileId,
           format: r.format,
           style: r.style,
           content: r.content,
@@ -166,11 +189,17 @@ export default function GeneratePage() {
   return (
     <div className="max-w-5xl mx-auto p-8">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-display text-3xl font-bold text-warm-white mb-2">
-          Generate Content
-        </h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="font-display text-3xl font-bold text-warm-white">
+            Generate Content
+          </h1>
+          <VoiceProfileSelector
+            selectedId={voiceProfileId}
+            onSelect={setVoiceProfileId}
+          />
+        </div>
         <p className="text-mid-gray mb-8">
-          Select formats and style, then generate content from your materials.
+          Select formats and style, then generate content in your voice.
         </p>
 
         {/* Controls */}

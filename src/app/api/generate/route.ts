@@ -6,7 +6,7 @@ import { buildVoiceProfileContext, buildGenerationPrompt } from "@/lib/prompts";
 
 export async function POST(req: NextRequest) {
   try {
-    const { projectId, format, style, summary } = await req.json();
+    const { projectId, format, style, summary, voiceProfileId: overrideProfileId } = await req.json();
 
     // Fetch materials
     const { data: materials } = await supabase
@@ -14,20 +14,24 @@ export async function POST(req: NextRequest) {
       .select("*")
       .eq("project_id", projectId);
 
-    // Fetch voice profile
-    const { data: project } = await supabase
-      .from("projects")
-      .select("voice_profile_id")
-      .eq("id", projectId)
-      .single();
+    // Fetch voice profile — use override if provided, else project default
+    let profileIdToUse = overrideProfileId;
+    if (!profileIdToUse) {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("voice_profile_id")
+        .eq("id", projectId)
+        .single();
+      profileIdToUse = project?.voice_profile_id;
+    }
 
     let voiceContext = "";
     let voiceProfileId: string | null = null;
-    if (project?.voice_profile_id) {
+    if (profileIdToUse) {
       const { data: profile } = await supabase
         .from("voice_profiles")
         .select("*")
-        .eq("id", project.voice_profile_id)
+        .eq("id", profileIdToUse)
         .single();
       if (profile) {
         voiceContext = buildVoiceProfileContext(profile);
