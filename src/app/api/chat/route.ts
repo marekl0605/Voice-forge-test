@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     let voiceContext = "";
+    let voiceTraits: { personality: string[]; tone: string[] } | undefined;
     if (project?.voice_profile_id) {
       const { data: profile } = await supabase
         .from("voice_profiles")
@@ -29,7 +30,8 @@ export async function POST(req: NextRequest) {
         .eq("id", project.voice_profile_id)
         .single();
       if (profile) {
-        voiceContext = `\n\nThe user has the following voice profile — keep this in mind when suggesting content direction:\n${buildVoiceProfileContext(profile)}`;
+        voiceContext = `\n\n${buildVoiceProfileContext(profile)}`;
+        voiceTraits = { personality: profile.personality_markers || [], tone: profile.tone || [] };
       }
     }
 
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
       ? `\n\n## User's Raw Materials\n${materials.map((m) => `[${m.type.toUpperCase()}] ${m.title || ""}: ${m.content}${m.url ? ` (${m.url})` : ""}`).join("\n\n")}`
       : "\n\nThe user hasn't added any materials yet. Ask them what they're thinking about or what topic they want to create content about.";
 
-    const systemPrompt = buildDistillationPrompt(mode as "guided" | "automated") + materialsContext + voiceContext;
+    const systemPrompt = buildDistillationPrompt(mode as "guided" | "automated", voiceTraits) + materialsContext + voiceContext;
 
     // Save conversation to Supabase
     const { data: conv } = await supabase

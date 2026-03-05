@@ -13,7 +13,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one writing sample is required" }, { status: 400 });
     }
 
-    const prompt = buildVoiceAnalysisPrompt(samples, {
+    // Normalize samples to new format: { content, type }
+    const normalizedSamples = samples.map((s: string | { content: string; type: string }) =>
+      typeof s === "string" ? { content: s, type: "writing" as const } : s
+    );
+
+    const prompt = buildVoiceAnalysisPrompt(normalizedSamples, {
       formality,
       tonePreferences,
       sentenceLength,
@@ -50,7 +55,7 @@ export async function POST(req: NextRequest) {
         phrases_used: profileData.phrases_used || [],
         phrases_avoided: profileData.phrases_avoided || [],
         personality_markers: profileData.personality_markers || [],
-        writing_samples: samples,
+        writing_samples: normalizedSamples.map((s: { content: string }) => s.content),
         raw_analysis: profileData.raw_analysis || "",
       })
       .select()
