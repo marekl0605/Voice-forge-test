@@ -18,6 +18,10 @@ import {
   ToggleRight,
   X,
   ArrowRight,
+  TrendingUp,
+  ChevronDown,
+  Flame,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Material } from "@/lib/types";
@@ -48,6 +52,9 @@ export default function ProjectWorkspacePage() {
   const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [voiceProfileId, setVoiceProfileId] = useState<string | null>(null);
+  const [trends, setTrends] = useState<{ youtube?: { title: string; context: string; relevance: number }[]; twitter?: { topic: string; context: string; relevance: number }[] } | null>(null);
+  const [trendsOpen, setTrendsOpen] = useState(false);
+  const [trendsLoading, setTrendsLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(chatMessages);
   messagesRef.current = chatMessages;
@@ -149,6 +156,37 @@ export default function ProjectWorkspacePage() {
   async function deleteMaterial(id: string) {
     await fetch(`/api/materials?id=${id}`, { method: "DELETE" });
     setMaterials((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  async function fetchTrends(industry: string) {
+    setTrendsLoading(true);
+    try {
+      const res = await fetch("/api/trends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ industry, keywords: [] }),
+      });
+      const data = await res.json();
+      if (data.trends) setTrends(data.trends);
+    } catch (err) {
+      console.error("Trends error:", err);
+    } finally {
+      setTrendsLoading(false);
+    }
+  }
+
+  async function addTrendAsMaterial(title: string, context: string, source: string) {
+    await fetch("/api/materials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: projectId,
+        type: "note",
+        title: `[Trending on ${source}] ${title}`,
+        content: context,
+      }),
+    });
+    fetchMaterials();
   }
 
   const getTypeIcon = (type: string) => {
@@ -309,13 +347,94 @@ export default function ProjectWorkspacePage() {
           </div>
         </div>
 
+        {/* Middle: Trending Panel (collapsible) */}
+        {trendsOpen && (
+          <div className="w-72 border-r border-forest-mid flex flex-col">
+            <div className="p-4 border-b border-forest-mid flex items-center justify-between">
+              <h2 className="text-sm font-medium text-warm-white flex items-center gap-2">
+                <Flame className="h-4 w-4 text-orange-400" /> Trending Now
+              </h2>
+              <button onClick={() => setTrendsOpen(false)} className="text-dark-gray hover:text-warm-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {trendsLoading ? (
+                <div className="text-center py-8 text-mid-gray text-xs">Loading trends...</div>
+              ) : !trends ? (
+                <div className="text-center py-8">
+                  <TrendingUp className="h-6 w-6 text-dark-gray mx-auto mb-2" />
+                  <p className="text-xs text-dark-gray mb-3">Enter your industry to discover trends</p>
+                  <form onSubmit={(e) => { e.preventDefault(); const input = (e.target as HTMLFormElement).elements.namedItem("industry") as HTMLInputElement; if (input.value.trim()) fetchTrends(input.value.trim()); }}>
+                    <input name="industry" placeholder="e.g., AI, SaaS, Marketing" className="w-full bg-forest border border-forest-mid rounded px-2 py-1.5 text-xs text-warm-white placeholder:text-dark-gray focus:border-lime focus:outline-none mb-2" />
+                    <button type="submit" className="w-full py-1.5 rounded bg-lime/10 text-lime text-xs font-medium hover:bg-lime/20 transition-colors">Find Trends</button>
+                  </form>
+                </div>
+              ) : (
+                <>
+                  {trends.twitter && trends.twitter.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-mono text-dark-gray uppercase mb-2">X / Twitter</h3>
+                      {trends.twitter.map((t, i) => (
+                        <div key={i} className="bg-forest border border-forest-mid rounded-lg p-2.5 mb-2">
+                          <p className="text-xs font-medium text-warm-white mb-1">{t.topic}</p>
+                          <p className="text-xs text-mid-gray line-clamp-2 mb-2">{t.context}</p>
+                          <button
+                            onClick={() => addTrendAsMaterial(t.topic, t.context, "X")}
+                            className="text-xs text-lime hover:text-lime-light transition-colors flex items-center gap-1"
+                          >
+                            <Plus className="h-3 w-3" /> Use as material
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {trends.youtube && trends.youtube.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-mono text-dark-gray uppercase mb-2">YouTube</h3>
+                      {trends.youtube.map((t, i) => (
+                        <div key={i} className="bg-forest border border-forest-mid rounded-lg p-2.5 mb-2">
+                          <p className="text-xs font-medium text-warm-white mb-1">{t.title}</p>
+                          <p className="text-xs text-mid-gray line-clamp-2 mb-2">{t.context}</p>
+                          <button
+                            onClick={() => addTrendAsMaterial(t.title, t.context, "YouTube")}
+                            className="text-xs text-lime hover:text-lime-light transition-colors flex items-center gap-1"
+                          >
+                            <Plus className="h-3 w-3" /> Use as material
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => { setTrends(null); }}
+                    className="w-full py-1.5 rounded bg-forest-mid text-mid-gray text-xs hover:text-warm-white transition-colors"
+                  >
+                    Search different topic
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Right: AI Chat */}
         <div className="flex-1 flex flex-col">
           {/* Mode Toggle */}
           <div className="px-6 py-3 border-b border-forest-mid flex items-center justify-between">
-            <h2 className="text-sm font-medium text-warm-white">
-              AI Content Partner
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-medium text-warm-white">
+                AI Content Partner
+              </h2>
+              {!trendsOpen && (
+                <button
+                  onClick={() => setTrendsOpen(true)}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-mid-gray hover:text-orange-400 hover:bg-orange-400/5 transition-colors"
+                >
+                  <Flame className="h-3.5 w-3.5" /> Trends
+                </button>
+              )}
+            </div>
             <button
               onClick={() =>
                 setMode((prev) => (prev === "guided" ? "automated" : "guided"))

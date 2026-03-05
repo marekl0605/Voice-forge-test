@@ -2,11 +2,11 @@ import { NextRequest } from "next/server";
 import { streamText } from "ai";
 import { openrouter } from "@/lib/openai";
 import { supabase } from "@/lib/supabase";
-import { buildVoiceProfileContext, buildGenerationPrompt } from "@/lib/prompts";
+import { buildVoiceProfileContext, buildGenerationPrompt, buildTrendContext } from "@/lib/prompts";
 
 export async function POST(req: NextRequest) {
   try {
-    const { projectId, format, style, summary, voiceProfileId: overrideProfileId } = await req.json();
+    const { projectId, format, style, summary, voiceProfileId: overrideProfileId, trendingTopics } = await req.json();
 
     // Fetch materials
     const { data: materials } = await supabase
@@ -54,13 +54,17 @@ export async function POST(req: NextRequest) {
 
     const contentSummary = summary || conv?.distilled_summary || "Generate content based on the raw materials provided.";
 
-    const generationPrompt = buildGenerationPrompt(format, style, contentSummary, materialsText);
+    const trendContext = trendingTopics ? buildTrendContext(trendingTopics) : undefined;
+    const generationPrompt = buildGenerationPrompt(format, style, contentSummary, materialsText, trendContext);
+
+    // Tune temperature per format
+    const tempByFormat: Record<string, number> = { x_post: 0.8, x_thread: 0.8, linkedin: 0.75, blog: 0.7, guide: 0.6 };
 
     const result = streamText({
       model: openrouter("anthropic/claude-sonnet-4-5"),
       system: voiceContext || "Write high-quality content based on the user's direction.",
       prompt: generationPrompt,
-      temperature: 0.7,
+      temperature: tempByFormat[format] || 0.7,
       maxOutputTokens: 3000,
     });
 
