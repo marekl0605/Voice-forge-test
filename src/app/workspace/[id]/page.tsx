@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Material } from "@/lib/types";
+import { VoiceProfileSelector } from "@/components/voice-profile-selector";
 
 const MATERIAL_TYPES = [
   { value: "note", label: "Note", icon: FileText },
@@ -46,6 +47,7 @@ export default function ProjectWorkspacePage() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [voiceProfileId, setVoiceProfileId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(chatMessages);
   messagesRef.current = chatMessages;
@@ -170,13 +172,19 @@ export default function ProjectWorkspacePage() {
             {materials.length} material{materials.length !== 1 ? "s" : ""} collected
           </p>
         </div>
-        <button
-          onClick={() => router.push(`/generate/${projectId}`)}
-          className="flex items-center gap-2 px-4 py-2 bg-lime text-forest rounded-lg font-medium hover:bg-lime-dark transition-colors"
-        >
-          <Sparkles className="h-4 w-4" /> Generate Content
-          <ArrowRight className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-3">
+          <VoiceProfileSelector
+            selectedId={voiceProfileId}
+            onSelect={setVoiceProfileId}
+          />
+          <button
+            onClick={() => router.push(`/generate/${projectId}`)}
+            className="flex items-center gap-2 px-4 py-2 bg-lime text-forest rounded-lg font-medium hover:bg-lime-dark transition-colors"
+          >
+            <Sparkles className="h-4 w-4" /> Generate Content
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Main content: Materials + Chat */}

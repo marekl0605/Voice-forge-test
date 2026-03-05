@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Mic,
@@ -13,9 +14,11 @@ import {
   ArrowLeft,
   Plus,
   X,
+  Upload,
+  File,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { VoiceProfile, WizardData } from "@/lib/types";
+import { VoiceProfile, WizardData, WizardSample } from "@/lib/types";
 
 const TONE_OPTIONS = [
   "Conversational",
@@ -42,7 +45,7 @@ export default function VoiceWizardPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [wizardData, setWizardData] = useState<WizardData>({
-    samples: [""],
+    samples: [{ content: "", type: "writing" }],
     formality: 5,
     tonePreferences: [],
     sentenceLength: "medium",
@@ -52,12 +55,46 @@ export default function VoiceWizardPage() {
   const [profile, setProfile] = useState<VoiceProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    acceptedFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result as string;
+        if (text.trim().length > 0) {
+          const isTranscript = file.name.toLowerCase().includes("transcript") ||
+            file.name.toLowerCase().includes("meeting") ||
+            file.name.toLowerCase().includes("call");
+          const newSample: WizardSample = {
+            content: text,
+            type: isTranscript ? "transcript" : "upload",
+            fileName: file.name,
+          };
+          setWizardData((prev) => ({
+            ...prev,
+            samples: [...prev.samples, newSample],
+          }));
+        }
+      };
+      reader.readAsText(file);
+    });
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "text/plain": [".txt"],
+      "text/markdown": [".md"],
+      "text/csv": [".csv"],
+    },
+    multiple: true,
+  });
+
   const canProceed = () => {
     switch (currentStep) {
       case 0:
         return true;
       case 1:
-        return wizardData.samples.some((s) => s.trim().length > 50);
+        return wizardData.samples.some((s) => s.content.trim().length > 50);
       case 2:
         return wizardData.tonePreferences.length >= 2 && wizardData.audienceType.trim().length > 0;
       default:
@@ -77,11 +114,15 @@ export default function VoiceWizardPage() {
   const analyzeVoice = async () => {
     setError(null);
     try {
+      const validSamples = wizardData.samples
+        .filter((s) => s.content.trim().length > 0)
+        .map((s) => ({ content: s.content, type: s.type }));
+
       const res = await fetch("/api/voice/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          samples: wizardData.samples.filter((s) => s.trim().length > 0),
+          samples: validSamples,
           formality: wizardData.formality,
           tonePreferences: wizardData.tonePreferences,
           sentenceLength: wizardData.sentenceLength,
@@ -108,6 +149,21 @@ export default function VoiceWizardPage() {
         ? prev.tonePreferences.filter((t) => t !== tone)
         : [...prev.tonePreferences, tone],
     }));
+  };
+
+  const removeSample = (index: number) => {
+    setWizardData((prev) => ({
+      ...prev,
+      samples: prev.samples.filter((_, j) => j !== index),
+    }));
+  };
+
+  const updateSampleContent = (index: number, content: string) => {
+    setWizardData((prev) => {
+      const newSamples = [...prev.samples];
+      newSamples[index] = { ...newSamples[index], content };
+      return { ...prev, samples: newSamples };
+    });
   };
 
   return (
@@ -181,48 +237,101 @@ export default function VoiceWizardPage() {
               </div>
             )}
 
-            {/* Step 1: Writing Samples */}
+            {/* Step 1: Writing Samples + File Upload */}
             {currentStep === 1 && (
               <div>
                 <h2 className="font-display text-2xl font-bold text-warm-white mb-2">
                   Share your writing
                 </h2>
                 <p className="text-mid-gray mb-6">
-                  Paste 2-3 pieces you&apos;ve written — LinkedIn posts, blog excerpts,
-                  emails, anything that sounds like you. The more, the better.
+                  Paste writing samples, or upload meeting transcripts and documents.
+                  The more material, the more accurate your voice profile.
                 </p>
-                <div className="space-y-4">
-                  {wizardData.samples.map((sample, i) => (
-                    <div key={i} className="relative">
-                      <textarea
-                        value={sample}
-                        onChange={(e) => {
-                          const newSamples = [...wizardData.samples];
-                          newSamples[i] = e.target.value;
-                          setWizardData((prev) => ({ ...prev, samples: newSamples }));
-                        }}
-                        placeholder={`Writing sample ${i + 1} — paste a LinkedIn post, blog paragraph, email, or anything you've written...`}
-                        className="w-full h-36 bg-forest-light border border-forest-mid rounded-lg p-4 text-warm-white placeholder:text-dark-gray focus:border-lime focus:outline-none resize-none font-body text-sm"
-                      />
-                      {wizardData.samples.length > 1 && (
-                        <button
-                          onClick={() => {
-                            const newSamples = wizardData.samples.filter((_, j) => j !== i);
-                            setWizardData((prev) => ({ ...prev, samples: newSamples }));
-                          }}
-                          className="absolute top-2 right-2 p-1 text-dark-gray hover:text-warm-white"
+
+                {/* File Upload Zone */}
+                <div
+                  {...getRootProps()}
+                  className={cn(
+                    "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all mb-6",
+                    isDragActive
+                      ? "border-lime bg-lime/5"
+                      : "border-forest-mid hover:border-dark-gray"
+                  )}
+                >
+                  <input {...getInputProps()} />
+                  <Upload className={cn("h-8 w-8 mx-auto mb-3", isDragActive ? "text-lime" : "text-dark-gray")} />
+                  <p className="text-sm text-mid-gray mb-1">
+                    {isDragActive
+                      ? "Drop files here..."
+                      : "Drag & drop files, or click to browse"}
+                  </p>
+                  <p className="text-xs text-dark-gray">
+                    .txt, .md files — meeting transcripts, blog drafts, emails, notes
+                  </p>
+                </div>
+
+                {/* Uploaded file badges */}
+                {wizardData.samples.some((s) => s.fileName) && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {wizardData.samples
+                      .map((s, i) => ({ ...s, index: i }))
+                      .filter((s) => s.fileName)
+                      .map((s) => (
+                        <div
+                          key={s.index}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-forest-light border border-forest-mid"
                         >
-                          <X className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {wizardData.samples.length < 5 && (
+                          <File className="h-3.5 w-3.5 text-lime" />
+                          <span className="text-xs text-warm-white">{s.fileName}</span>
+                          <span className={cn(
+                            "text-xs px-1.5 py-0.5 rounded",
+                            s.type === "transcript" ? "bg-lime/10 text-lime" : "bg-forest-mid text-mid-gray"
+                          )}>
+                            {s.type === "transcript" ? "transcript" : "document"}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeSample(s.index);
+                            }}
+                            className="text-dark-gray hover:text-warm-white"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {/* Manual text areas */}
+                <div className="space-y-4">
+                  {wizardData.samples
+                    .map((sample, i) => ({ ...sample, index: i }))
+                    .filter((s) => !s.fileName)
+                    .map((sample) => (
+                      <div key={sample.index} className="relative">
+                        <textarea
+                          value={sample.content}
+                          onChange={(e) => updateSampleContent(sample.index, e.target.value)}
+                          placeholder={`Writing sample — paste a LinkedIn post, blog paragraph, email, or anything you've written...`}
+                          className="w-full h-36 bg-forest-light border border-forest-mid rounded-lg p-4 text-warm-white placeholder:text-dark-gray focus:border-lime focus:outline-none resize-none font-body text-sm"
+                        />
+                        {wizardData.samples.filter((s) => !s.fileName).length > 1 && (
+                          <button
+                            onClick={() => removeSample(sample.index)}
+                            className="absolute top-2 right-2 p-1 text-dark-gray hover:text-warm-white"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  {wizardData.samples.length < 8 && (
                     <button
                       onClick={() =>
                         setWizardData((prev) => ({
                           ...prev,
-                          samples: [...prev.samples, ""],
+                          samples: [...prev.samples, { content: "", type: "writing" }],
                         }))
                       }
                       className="flex items-center gap-2 text-sm text-lime hover:text-lime-light transition-colors"
@@ -426,6 +535,13 @@ export default function VoiceWizardPage() {
                   transition={{ delay: 0.4 }}
                   className="bg-forest-light border border-forest-mid rounded-xl p-6 space-y-6"
                 >
+                  {/* Voice Name */}
+                  <div className="text-center">
+                    <h3 className="font-display text-xl font-bold text-lime">
+                      {profile.name}
+                    </h3>
+                  </div>
+
                   {/* Tone */}
                   <div>
                     <h3 className="text-xs font-mono text-dark-gray uppercase tracking-wider mb-2">
@@ -512,9 +628,9 @@ export default function VoiceWizardPage() {
                   {profile.raw_analysis && (
                     <div>
                       <h3 className="text-xs font-mono text-dark-gray uppercase tracking-wider mb-2">
-                        Analysis
+                        Voice Blueprint
                       </h3>
-                      <p className="text-sm text-mid-gray leading-relaxed">
+                      <p className="text-sm text-mid-gray leading-relaxed whitespace-pre-line">
                         {profile.raw_analysis}
                       </p>
                     </div>

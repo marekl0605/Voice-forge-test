@@ -76,11 +76,27 @@ export interface GeneratedContent {
   updated_at: string;
 }
 
+export type SampleType = "writing" | "transcript" | "upload";
+
+export interface WizardSample {
+  content: string;
+  type: SampleType;
+  fileName?: string;
+}
+
 export interface WizardData {
-  samples: string[];
+  samples: WizardSample[];
   formality: number;
   tonePreferences: string[];
   sentenceLength: "short" | "medium" | "long";
   audienceType: string;
   industryContext: string;
+}
+
+export interface TrendingTopic {
+  source: "youtube" | "twitter";
+  title: string;
+  url?: string;
+  context?: string;
+  relevance?: number;
 }
