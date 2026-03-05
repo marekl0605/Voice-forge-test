@@ -16,6 +16,8 @@ import {
   X,
   Upload,
   File,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoiceProfile, WizardData, WizardSample } from "@/lib/types";
@@ -54,6 +56,8 @@ export default function VoiceWizardPage() {
   });
   const [profile, setProfile] = useState<VoiceProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [profileName, setProfileName] = useState("");
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     acceptedFiles.forEach((file) => {
@@ -135,6 +139,7 @@ export default function VoiceWizardPage() {
       if (!res.ok) throw new Error(data.error || "Analysis failed");
 
       setProfile(data.profile);
+      setProfileName(data.profile.name || "My Voice");
       setCurrentStep(4);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -535,11 +540,58 @@ export default function VoiceWizardPage() {
                   transition={{ delay: 0.4 }}
                   className="bg-forest-light border border-forest-mid rounded-xl p-6 space-y-6"
                 >
-                  {/* Voice Name */}
+                  {/* Voice Name — editable */}
                   <div className="text-center">
-                    <h3 className="font-display text-xl font-bold text-lime">
-                      {profile.name}
-                    </h3>
+                    {editingName ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <input
+                          value={profileName}
+                          onChange={(e) => setProfileName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              setEditingName(false);
+                              if (profile && profileName.trim()) {
+                                fetch("/api/voice/profile", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: profile.id, name: profileName.trim() }),
+                                });
+                                setProfile({ ...profile, name: profileName.trim() });
+                              }
+                            }
+                          }}
+                          autoFocus
+                          className="bg-transparent border-b-2 border-lime text-center font-display text-xl font-bold text-lime focus:outline-none w-64"
+                        />
+                        <button
+                          onClick={() => {
+                            setEditingName(false);
+                            if (profile && profileName.trim()) {
+                              fetch("/api/voice/profile", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: profile.id, name: profileName.trim() }),
+                              });
+                              setProfile({ ...profile, name: profileName.trim() });
+                            }
+                          }}
+                          className="p-1 text-lime hover:text-lime-light"
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setEditingName(true)}
+                        className="group flex items-center justify-center gap-2 mx-auto"
+                      >
+                        <h3 className="font-display text-xl font-bold text-lime">
+                          {profileName}
+                        </h3>
+                        <Pencil className="h-3.5 w-3.5 text-dark-gray opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    )}
+                    <p className="text-xs text-dark-gray mt-1">Click to rename</p>
                   </div>
 
                   {/* Tone */}
