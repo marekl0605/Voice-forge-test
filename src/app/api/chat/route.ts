@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = streamText({
-      model: openrouter("openai/gpt-4o"),
+      model: openrouter("anthropic/claude-sonnet-4-5"),
       system: systemPrompt,
       messages,
       temperature: 0.8,

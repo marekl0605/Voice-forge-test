@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     });
 
     const { text } = await generateText({
-      model: openrouter("openai/gpt-4o"),
+      model: openrouter("anthropic/claude-sonnet-4-5"),
       prompt,
       temperature: 0.7,
       maxOutputTokens: 2000,

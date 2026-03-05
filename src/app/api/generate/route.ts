@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     const generationPrompt = buildGenerationPrompt(format, style, contentSummary, materialsText);
 
     const result = streamText({
-      model: openrouter("openai/gpt-4o"),
+      model: openrouter("anthropic/claude-sonnet-4-5"),
       system: voiceContext || "Write high-quality content based on the user's direction.",
       prompt: generationPrompt,
       temperature: 0.7,
