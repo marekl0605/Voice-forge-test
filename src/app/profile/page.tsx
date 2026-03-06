@@ -43,6 +43,8 @@ export default function ProfilePage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [guidelineLoading, setGuidelineLoading] = useState(false);
   const [showGuideline, setShowGuideline] = useState(false);
+  const [editingGuideline, setEditingGuideline] = useState(false);
+  const [guidelineBuffer, setGuidelineBuffer] = useState("");
 
   const fetchProfiles = useCallback(async () => {
     const res = await fetch("/api/voice/profile?all=true");
@@ -594,13 +596,23 @@ export default function ProfilePage() {
                         Writing Guideline
                       </h3>
                       <div className="flex items-center gap-2">
-                        {profile.writing_guideline && (
+                        {profile.writing_guideline && !editingGuideline && (
                           <>
                             <button
                               onClick={() => setShowGuideline(!showGuideline)}
                               className="px-3 py-1 rounded text-xs text-mid-gray hover:text-warm-white transition-colors"
                             >
                               {showGuideline ? "Hide" : "Show"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setGuidelineBuffer(profile.writing_guideline || "");
+                                setEditingGuideline(true);
+                                setShowGuideline(true);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1 rounded bg-forest text-xs text-mid-gray hover:text-warm-white transition-colors"
+                            >
+                              <Edit3 className="h-3 w-3" /> Edit
                             </button>
                             <button
                               onClick={downloadGuideline}
@@ -610,27 +622,48 @@ export default function ProfilePage() {
                             </button>
                           </>
                         )}
-                        <button
-                          onClick={generateGuideline}
-                          disabled={guidelineLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime/10 text-lime text-xs font-medium hover:bg-lime/20 transition-colors disabled:opacity-50"
-                        >
-                          {guidelineLoading ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-3.5 w-3.5" />
-                              {profile.writing_guideline ? "Regenerate" : "Generate"}
-                            </>
-                          )}
-                        </button>
+                        {editingGuideline && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                await saveField("writing_guideline", guidelineBuffer);
+                                setEditingGuideline(false);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime/10 text-lime text-xs font-medium hover:bg-lime/20 transition-colors"
+                            >
+                              <Save className="h-3.5 w-3.5" /> Save
+                            </button>
+                            <button
+                              onClick={() => setEditingGuideline(false)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-dark-gray hover:text-warm-white transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" /> Cancel
+                            </button>
+                          </>
+                        )}
+                        {!editingGuideline && (
+                          <button
+                            onClick={generateGuideline}
+                            disabled={guidelineLoading}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime/10 text-lime text-xs font-medium hover:bg-lime/20 transition-colors disabled:opacity-50"
+                          >
+                            {guidelineLoading ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-3.5 w-3.5" />
+                                {profile.writing_guideline ? "Regenerate" : "Generate"}
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {!profile.writing_guideline && !guidelineLoading && (
+                    {!profile.writing_guideline && !guidelineLoading && !editingGuideline && (
                       <p className="text-sm text-dark-gray">
                         Generate a comprehensive Personal Brand Style Guide from your voice profile.
                         This becomes the master ruleset for all AI content generation and a shareable document for your team.
@@ -647,7 +680,18 @@ export default function ProfilePage() {
                       </div>
                     )}
 
-                    {profile.writing_guideline && showGuideline && !guidelineLoading && (
+                    {editingGuideline && !guidelineLoading && (
+                      <div className="border-t border-forest-mid pt-4 mt-4">
+                        <textarea
+                          value={guidelineBuffer}
+                          onChange={(e) => setGuidelineBuffer(e.target.value)}
+                          className="w-full bg-forest border border-forest-mid rounded-lg p-4 text-sm text-warm-white placeholder:text-dark-gray focus:border-lime focus:outline-none resize-y min-h-[300px] h-[500px] font-mono leading-relaxed"
+                          placeholder="Write or paste your writing guideline here..."
+                        />
+                      </div>
+                    )}
+
+                    {profile.writing_guideline && showGuideline && !guidelineLoading && !editingGuideline && (
                       <div className="prose prose-invert prose-sm max-w-none mt-4 text-warm-gray leading-relaxed whitespace-pre-wrap border-t border-forest-mid pt-4">
                         {profile.writing_guideline}
                       </div>
