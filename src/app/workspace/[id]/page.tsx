@@ -421,33 +421,51 @@ export default function ProjectWorkspacePage() {
         {/* Right: AI Chat */}
         <div className="flex-1 flex flex-col">
           {/* Mode Toggle */}
-          <div className="px-6 py-3 border-b border-forest-mid flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-medium text-warm-white">
-                AI Content Partner
-              </h2>
-              {!trendsOpen && (
+          <div className="px-6 py-3 border-b border-forest-mid">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-medium text-warm-white">
+                  AI Content Partner
+                </h2>
+                {!trendsOpen && (
+                  <button
+                    onClick={() => setTrendsOpen(true)}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-mid-gray hover:text-orange-400 hover:bg-orange-400/5 transition-colors"
+                  >
+                    <Flame className="h-3.5 w-3.5" /> Trends
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setTrendsOpen(true)}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-mid-gray hover:text-orange-400 hover:bg-orange-400/5 transition-colors"
+                  onClick={() => {
+                    const next = mode === "guided" ? "automated" : "guided";
+                    setMode(next);
+                    if (chatMessages.length > 0) {
+                      setChatMessages([]);
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                    mode === "guided"
+                      ? "bg-lime/10 text-lime border border-lime/20"
+                      : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                  )}
                 >
-                  <Flame className="h-3.5 w-3.5" /> Trends
+                  {mode === "guided" ? (
+                    <ToggleLeft className="h-4 w-4" />
+                  ) : (
+                    <ToggleRight className="h-4 w-4" />
+                  )}
+                  {mode === "guided" ? "Guided" : "Automated"}
                 </button>
-              )}
+              </div>
             </div>
-            <button
-              onClick={() =>
-                setMode((prev) => (prev === "guided" ? "automated" : "guided"))
-              }
-              className="flex items-center gap-2 text-xs text-mid-gray hover:text-warm-white transition-colors"
-            >
-              {mode === "guided" ? (
-                <ToggleLeft className="h-5 w-5 text-lime" />
-              ) : (
-                <ToggleRight className="h-5 w-5 text-lime" />
-              )}
-              {mode === "guided" ? "Guided Mode" : "Automated Mode"}
-            </button>
+            <p className="text-xs text-dark-gray mt-1.5">
+              {mode === "guided"
+                ? "I'll ask questions to sharpen your idea before generating content."
+                : "Drop your topic and I'll produce a full content brief instantly."}
+            </p>
           </div>
 
           {/* Messages */}

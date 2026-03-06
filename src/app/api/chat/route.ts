@@ -41,14 +41,14 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = buildDistillationPrompt(mode as "guided" | "automated", voiceTraits) + materialsContext + voiceContext;
 
-    // Save conversation to Supabase
+    // Save conversation to Supabase — create if it doesn't exist
     const { data: conv } = await supabase
       .from("conversations")
       .select("id")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (conv) {
       await supabase
@@ -58,6 +58,13 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", conv.id);
+    } else {
+      await supabase
+        .from("conversations")
+        .insert({
+          project_id: projectId,
+          messages: messages,
+        });
     }
 
     const result = streamText({
