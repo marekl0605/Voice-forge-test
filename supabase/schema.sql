@@ -14,9 +14,17 @@ CREATE TABLE IF NOT EXISTS voice_profiles (
   personality_markers TEXT[] DEFAULT '{}',
   writing_samples TEXT[] DEFAULT '{}',
   raw_analysis TEXT DEFAULT '',
+  writing_guideline TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: Add writing_guideline column if it doesn't exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'voice_profiles' AND column_name = 'writing_guideline') THEN
+    ALTER TABLE voice_profiles ADD COLUMN writing_guideline TEXT DEFAULT '';
+  END IF;
+END $$;
 
 -- Projects / topics in the workspace
 CREATE TABLE IF NOT EXISTS projects (

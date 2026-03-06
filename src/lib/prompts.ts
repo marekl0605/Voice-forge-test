@@ -1,4 +1,5 @@
 import { VoiceProfile } from "./types";
+import { loadSkill } from "./skills";
 
 export function buildVoiceAnalysisPrompt(
   samples: { content: string; type: "writing" | "transcript" | "upload" }[],
@@ -19,7 +20,15 @@ export function buildVoiceAnalysisPrompt(
     return `${label}\n${s.content}`;
   }).join("\n\n");
 
-  return `You are a world-class writing voice forensics expert. Your job is to deconstruct HOW someone writes — not just what they say, but the mechanical patterns that make their writing uniquely theirs.
+  const skill = loadSkill("voice-analyst");
+  const hasTranscripts = samples.some(s => s.type === "transcript");
+
+  // Remove the transcript section from skill if no transcripts provided
+  const skillContent = hasTranscripts
+    ? skill
+    : skill.replace(/## Transcript-Specific Instructions[\s\S]*?(?=## Output Format)/, "");
+
+  return `${skillContent}
 
 ## Writing Samples
 ${samplesText}
@@ -29,52 +38,10 @@ ${samplesText}
 - Tone Preferences: ${preferences.tonePreferences.join(", ")}
 - Preferred Sentence Length: ${preferences.sentenceLength}
 - Target Audience: ${preferences.audienceType}
-- Industry/Domain: ${preferences.industryContext}
-
-## Analysis Instructions
-
-Go deep. Don't just label their tone — DECONSTRUCT their patterns:
-
-1. **Sentence architecture**: Do they lead with short punchy openers then expand? Do they use em-dashes, parentheticals, or semicolons? Do they trail off with ellipses? How do they transition between ideas?
-
-2. **Rhetorical devices**: Do they use analogies? Rhetorical questions? Lists? Numbered points? Do they address the reader directly ("you") or stay abstract ("one might argue")?
-
-3. **Verbal fingerprints**: Find EXACT phrases, transitions, and constructions they repeat. "Here's the thing", "Look,", "The reality is", etc. These are gold — they make the voice real.
-
-4. **What they DON'T do**: Equally important. Do they avoid corporate speak? Avoid hedging? Never use exclamation marks? Skip introductions and jump straight in?
-
-5. **Emotional texture**: Are they vulnerable? Sarcastic? Earnest? Do they use humor as a tool or stay serious? How do they build trust with the reader?
-
-6. **Paragraph rhythm**: Short paragraphs or dense ones? Do they use one-line paragraphs for emphasis? How do they open and close sections?
-
-${samples.some(s => s.type === "transcript") ? `
-7. **Speaking patterns** (from transcripts): Look for conversational fillers they use intentionally ("honestly", "right?"), how they build arguments verbally, tangential asides they use to add color, and how they emphasize key points through repetition or restatement.
-` : ""}
-
-Return a JSON object with EXACTLY this structure (no markdown, no code fences, just valid JSON):
-{
-  "name": "A creative 2-3 word name capturing their voice essence (e.g., 'The Straight Shooter', 'Warm Provocateur')",
-  "tone": ["array", "of", "3-5", "specific tone descriptors — not generic like 'professional', but precise like 'casually authoritative' or 'irreverent but informed'"],
-  "formality_level": <number 1-10>,
-  "sentence_structure": {
-    "avg_length": "short" | "medium" | "long",
-    "variety": "low" | "medium" | "high",
-    "uses_fragments": <boolean>,
-    "uses_questions": <boolean>
-  },
-  "vocabulary": {
-    "complexity": "simple" | "moderate" | "sophisticated",
-    "jargon_level": "none" | "some" | "heavy",
-    "industry_terms": ["specific terms from their samples"]
-  },
-  "phrases_used": ["EXACT phrases and constructions from their writing — at least 7. Include transitions, openers, and verbal tics"],
-  "phrases_avoided": ["specific types of language they clearly avoid — at least 5"],
-  "personality_markers": ["specific personality traits visible in writing — at least 5. Be precise: not 'funny' but 'uses dry humor to undercut corporate seriousness'"],
-  "raw_analysis": "A detailed 3-4 paragraph voice blueprint. Write it as INSTRUCTIONS for someone who needs to ghostwrite as this person. Be specific: 'They open paragraphs with short declarative statements, then expand with a longer sentence that adds nuance. They favor em-dashes over commas for asides. They never start with a question — they STATE, then question.' Include rhythm patterns, emotional texture, and specific dos/don'ts."
-}`;
+- Industry/Domain: ${preferences.industryContext}`;
 }
 
-export function buildVoiceProfileContext(profile: VoiceProfile): string {
+export function buildVoiceProfileContext(profile: VoiceProfile, writingGuideline?: string): string {
   // Convert personality markers into behavioral instructions
   const personalityInstructions = profile.personality_markers.map(marker => {
     const m = marker.toLowerCase();
@@ -121,6 +88,11 @@ export function buildVoiceProfileContext(profile: VoiceProfile): string {
         ? "Professional and polished, but still human. Clean prose, well-structured arguments, but with personality showing through."
         : "Authoritative and precise. Measured language, careful word choice, strong command of structure. Think editorial in a respected publication.";
 
+  // If a writing guideline exists, use it as the primary voice instruction
+  const guidelineSection = writingGuideline
+    ? `\n\n## PERSONAL BRAND STYLE GUIDE\nThe following is the user's comprehensive writing guideline. This is the MASTER RULESET — follow it precisely.\n\n${writingGuideline}`
+    : "";
+
   return `You are ghostwriting as a specific person. Your job is to be INDISTINGUISHABLE from their real writing. Every sentence should pass a blind test — someone who knows this person should read it and think "that sounds exactly like them."
 
 ## VOICE DNA
@@ -148,6 +120,7 @@ If you catch yourself writing any of these, stop and rewrite the sentence. These
 
 ### Voice Blueprint
 ${profile.raw_analysis}
+${guidelineSection}
 
 ## QUALITY CHECK
 Before finalizing, mentally re-read your output and ask:
@@ -160,56 +133,21 @@ If any answer is "no," rewrite those sections.`;
 }
 
 export function buildDistillationPrompt(mode: "guided" | "automated", voiceTraits?: { personality: string[]; tone: string[] }): string {
+  const skill = loadSkill("content-strategist");
   const voiceHint = voiceTraits
     ? `\n\nThis person's voice is ${voiceTraits.tone.join(", ")} with traits: ${voiceTraits.personality.join(", ")}. Tailor your questions and suggestions to angles that play to these strengths.`
     : "";
 
+  // The skill file contains both modes separated by "---"
+  const sections = skill.split("---");
+  const guidedSection = sections[0] || "";
+  const automatedSection = sections[1] || "";
+
   if (mode === "guided") {
-    return `You are a sharp content strategist and creative collaborator. You're helping someone develop raw ideas into compelling, publishable content.
-
-## YOUR APPROACH
-You don't generate content yet. You EXTRACT the best version of their idea through conversation.
-
-**Round 1-2: Understand the seed**
-- What's the core idea or experience they want to share?
-- What triggered this — a frustration, insight, conversation, trend?
-- Who needs to hear this and why NOW?
-
-**Round 3-4: Sharpen the angle**
-- Push back on generic takes. "Everyone says that — what's YOUR specific take?"
-- Find the tension or contrarian element that makes this interesting
-- Help them find ONE clear thesis, not a cloud of related thoughts
-
-**Round 5+: Shape the content**
-- Suggest a specific hook or opening
-- Identify the 2-3 supporting points that make the argument airtight
-- Recommend a format that matches the idea's energy
-
-## RULES
-- Keep responses to 2-3 sentences + one focused question
-- Be direct. Challenge vague thinking. Say "that's too broad" or "I've seen that take before — what makes yours different?"
-- You're a collaborator, not a yes-machine. Disagree when it serves the work.
-- Don't summarize what they just said back to them. Move the conversation FORWARD.
-- After 3-5 exchanges, naturally transition to suggesting specific content direction.${voiceHint}`;
+    return `${guidedSection.trim()}${voiceHint}`;
   }
 
-  return `You are a sharp content strategist. Distill the user's raw materials into a focused content brief.
-
-Analyze everything provided and produce:
-
-**CORE THESIS** — One sentence. The single boldest, most shareable version of their idea.
-
-**ANGLE** — What makes this take unique? Why would someone stop scrolling for this?
-
-**KEY ARGUMENTS** — 3-4 supporting points, each in one sentence.
-
-**TARGET READER** — Who specifically needs this? Be precise (not "marketers" but "marketing leaders tired of generic AI content").
-
-**HOOK OPTIONS** — 3 different opening lines, each taking a different approach (provocative question, bold statement, surprising stat/story).
-
-**RECOMMENDED FORMAT** — Which format(s) suit this idea best and why.
-
-Be sharp and opinionated. Don't hedge. Pick a direction and commit to it.${voiceHint}`;
+  return `${automatedSection.trim()}${voiceHint}`;
 }
 
 export function buildGenerationPrompt(
@@ -219,72 +157,46 @@ export function buildGenerationPrompt(
   materials: string,
   trendContext?: string
 ): string {
-  const formatInstructions: Record<string, string> = {
-    blog: `## FORMAT: Blog Post (600-1000 words)
-
-STRUCTURE:
-- **Headline**: Specific, curiosity-driven. Not clickbait. Think "The real reason X happens" not "10 tips for Y"
-- **Opening** (2-3 sentences): Start with a bold claim, surprising observation, or mini-story. NEVER start with "In today's world" or any generic setup. Drop the reader into the middle of the idea.
-- **Body**: Build your argument in 3-4 sections. Each section should have a clear mini-thesis. Use subheadings only if they ADD value (not just to break up text).
-- **Closing** (2-3 sentences): Don't summarize. Leave the reader with something — a challenge, a question, a reframed perspective. Make them think after they close the tab.
-
-ANTI-PATTERNS (never do these):
-- Don't start paragraphs with "Additionally," "Furthermore," "Moreover," or "In conclusion"
-- Don't use "In this blog post, we'll explore..." or any meta-commentary
-- Don't end with "What do you think? Let me know in the comments!"`,
-
-    guide: `## FORMAT: Comprehensive Guide (1000-1500 words)
-
-STRUCTURE:
-- **Title**: Promise a specific outcome. "How to X so you can Y" or "The complete framework for X"
-- **Intro** (3-4 sentences): Who is this for, what they'll walk away with, why existing approaches fall short
-- **Sections** (4-6): Each with a clear heading, specific instructions, and at least one concrete example or framework
-- **Closing**: A clear "start here" action item — make it immediately implementable
-
-The guide should feel like getting advice from someone who's done this successfully, not reading a Wikipedia entry. Inject opinion about what works and what doesn't. Share specific tradeoffs and edge cases.`,
-
-    x_post: `## FORMAT: X/Twitter Post (max 280 characters)
-
-Write ONE standalone post that could go viral. Requirements:
-- Immediate hook in the first line
-- Complete thought that stands alone
-- No hashtags unless they're part of the joke/point
-- Optimized for retweets — make people feel smart for sharing it
-
-Then write "---THREAD---" and follow with a 3-5 tweet thread version that unpacks the same idea with more nuance. Each tweet under 280 chars. First tweet = hook that makes people click "Show thread."`,
-
-    x_thread: `## FORMAT: X/Twitter Thread (5-8 tweets)
-
-STRUCTURE:
-- **Tweet 1 (HOOK)**: The single most compelling, scroll-stopping version of the idea. Use one of: bold claim, surprising stat, "unpopular opinion:", or pattern interrupt
-- **Tweets 2-6 (BODY)**: Each tweet = one point. Start each tweet strong (don't rely on thread context). Use white space between logical units.
-- **Final tweet (CLOSER)**: Memorable takeaway, call-to-action, or question. End with "Follow @[user] for more" vibe without being cringe.
-
-Each tweet MUST be under 280 characters. Number them (1/, 2/, etc).`,
-
-    linkedin: `## FORMAT: LinkedIn Post (150-300 words)
-
-STRUCTURE:
-- **Line 1 (HOOK)**: The first line must create curiosity or tension. This is the "see more" line — if it's boring, no one clicks.
-- **Body**: Short paragraphs (1-2 sentences each). Build a narrative or argument. Include a personal angle — what you experienced, learned, or observed.
-- **Closer**: End with a question that invites real engagement (not "agree?"). Make people want to share their own experience.
-
-FORMATTING:
-- Line breaks between every paragraph
-- No bullet points in the first 3 lines (LinkedIn shows these below the fold)
-- No emoji spam
-- No "I'm humbled to announce" energy`,
+  // Load format-specific skill file
+  const formatSkillMap: Record<string, string> = {
+    blog: "blog-expert",
+    guide: "guide-expert",
+    x_post: "x-expert",
+    x_thread: "x-expert",
+    linkedin: "linkedin-expert",
   };
+
+  const skillName = formatSkillMap[format] || "blog-expert";
+  const formatInstructions = loadSkill(skillName);
+
+  // For x_post vs x_thread, extract the right section from the same skill file
+  let formatSection = formatInstructions;
+  if (format === "x_post") {
+    // Use the single post section primarily
+    const threadMarker = "## FORMAT: Thread";
+    const idx = formatInstructions.indexOf(threadMarker);
+    if (idx > 0) {
+      formatSection = formatInstructions.substring(0, idx).trim() +
+        '\n\nThen write "---THREAD---" and follow with a 3-5 tweet thread version that unpacks the same idea with more nuance.';
+    }
+  } else if (format === "x_thread") {
+    // Use the thread section primarily
+    const threadMarker = "## FORMAT: Thread";
+    const idx = formatInstructions.indexOf(threadMarker);
+    if (idx > 0) {
+      formatSection = formatInstructions.substring(idx).trim();
+    }
+  }
 
   const styleLayer = style === "formal"
     ? `\n\nSTYLE OVERLAY: While maintaining the voice profile, lean toward the more polished end of their range. Tighter prose, fewer fragments, stronger structure. Think "their best writing day" not "their casual Tuesday."`
-    : `\n\nSTYLE OVERLAY: Lean into the conversational, human side of their voice. If they use humor, more of it. If they're casual, be casually brilliant. Think "their most authentic, relaxed writing."`
+    : `\n\nSTYLE OVERLAY: Lean into the conversational, human side of their voice. If they use humor, more of it. If they're casual, be casually brilliant. Think "their most authentic, relaxed writing."`;
 
   const trendLayer = trendContext
     ? `\n\n## TRENDING CONTEXT\n${trendContext}\nIf any of these trends are relevant to the topic, weave in timely references to increase relevance and shareability. Don't force it — only reference trends that genuinely connect to the content.`
     : "";
 
-  return `${formatInstructions[format] || formatInstructions.blog}
+  return `${formatSection}
 ${styleLayer}
 
 ## CONTENT DIRECTION
@@ -298,6 +210,42 @@ ${trendLayer}
 - Output ONLY the finished content. No meta-commentary, no "Here's your blog post:", no labels.
 - The content must sound like a real person wrote it, not an AI. Read it back — if it sounds like ChatGPT, rewrite it.
 - Every sentence should earn its place. Cut filler ruthlessly.`;
+}
+
+export function buildWritingGuidelinePrompt(profile: VoiceProfile): string {
+  const skill = loadSkill("writing-guideline-generator");
+
+  return `${skill}
+
+## Voice Profile Data
+
+**Name:** ${profile.name}
+**Tone:** ${profile.tone.join(", ")}
+**Formality:** ${profile.formality_level}/10
+
+**Sentence Structure:**
+- Average length: ${profile.sentence_structure.avg_length}
+- Variety: ${profile.sentence_structure.variety}
+- Uses fragments: ${profile.sentence_structure.uses_fragments}
+- Uses questions: ${profile.sentence_structure.uses_questions}
+
+**Vocabulary:**
+- Complexity: ${profile.vocabulary.complexity}
+- Jargon level: ${profile.vocabulary.jargon_level}
+- Industry terms: ${profile.vocabulary.industry_terms.join(", ")}
+
+**Signature Phrases:** ${profile.phrases_used.map(p => `"${p}"`).join(", ")}
+
+**Phrases to Avoid:** ${profile.phrases_avoided.map(p => `"${p}"`).join(", ")}
+
+**Personality Markers:** ${profile.personality_markers.join(", ")}
+
+**Voice Blueprint:**
+${profile.raw_analysis}
+
+---
+
+Now generate the complete Personal Brand Style Guide based on this voice profile data. Output it as clean markdown.`;
 }
 
 export function buildTrendContext(trends: { youtube?: { title: string; url: string }[]; twitter?: { topic: string; context: string }[] }): string {
