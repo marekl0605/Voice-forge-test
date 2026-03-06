@@ -13,6 +13,7 @@ import {
   Copy,
   Loader2,
   Save,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContentFormat, ContentStyle } from "@/lib/types";
@@ -21,7 +22,8 @@ import { VoiceProfileSelector } from "@/components/voice-profile-selector";
 const FORMATS: { value: ContentFormat; label: string; icon: typeof FileText }[] = [
   { value: "blog", label: "Blog Post", icon: FileText },
   { value: "guide", label: "Guide", icon: BookOpen },
-  { value: "x_post", label: "X / Twitter", icon: Twitter },
+  { value: "x_post", label: "X Post", icon: Twitter },
+  { value: "x_thread", label: "X Thread", icon: MessageSquare },
   { value: "linkedin", label: "LinkedIn", icon: Linkedin },
 ];
 

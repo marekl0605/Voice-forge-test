@@ -172,15 +172,14 @@ export function buildGenerationPrompt(
   // For x_post vs x_thread, extract the right section from the same skill file
   let formatSection = formatInstructions;
   if (format === "x_post") {
-    // Use the single post section primarily
+    // Single post only — extract everything before the thread section
     const threadMarker = "## FORMAT: Thread";
     const idx = formatInstructions.indexOf(threadMarker);
     if (idx > 0) {
-      formatSection = formatInstructions.substring(0, idx).trim() +
-        '\n\nThen write "---THREAD---" and follow with a 3-5 tweet thread version that unpacks the same idea with more nuance.';
+      formatSection = formatInstructions.substring(0, idx).trim();
     }
   } else if (format === "x_thread") {
-    // Use the thread section primarily
+    // Thread only — extract from the thread section onward
     const threadMarker = "## FORMAT: Thread";
     const idx = formatInstructions.indexOf(threadMarker);
     if (idx > 0) {
