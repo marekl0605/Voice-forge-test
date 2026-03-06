@@ -58,6 +58,7 @@ export default function VoiceWizardPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [profileName, setProfileName] = useState("");
+  const [guidelineStatus, setGuidelineStatus] = useState<"idle" | "generating" | "done" | "error">("idle");
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     acceptedFiles.forEach((file) => {
@@ -141,6 +142,25 @@ export default function VoiceWizardPage() {
       setProfile(data.profile);
       setProfileName(data.profile.name || "My Voice");
       setCurrentStep(4);
+
+      // Auto-generate writing guideline in the background
+      if (data.profile?.id) {
+        setGuidelineStatus("generating");
+        fetch("/api/voice/guideline", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profileId: data.profile.id }),
+        })
+          .then((res) => res.json())
+          .then((gData) => {
+            if (gData.guideline) {
+              setGuidelineStatus("done");
+            } else {
+              setGuidelineStatus("error");
+            }
+          })
+          .catch(() => setGuidelineStatus("error"));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setCurrentStep(2);
@@ -674,6 +694,35 @@ export default function VoiceWizardPage() {
                         </span>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Writing Guideline Status */}
+                  <div>
+                    <h3 className="text-xs font-mono text-dark-gray uppercase tracking-wider mb-2">
+                      Writing Guideline
+                    </h3>
+                    {guidelineStatus === "generating" && (
+                      <div className="flex items-center gap-2 text-sm text-mid-gray">
+                        <Loader2 className="h-4 w-4 animate-spin text-lime" />
+                        Auto-generating your Personal Brand Style Guide...
+                      </div>
+                    )}
+                    {guidelineStatus === "done" && (
+                      <div className="flex items-center gap-2 text-sm text-lime">
+                        <Check className="h-4 w-4" />
+                        Writing guideline generated — it will power all your content generation.
+                      </div>
+                    )}
+                    {guidelineStatus === "error" && (
+                      <div className="text-sm text-mid-gray">
+                        Guideline generation skipped. You can generate it later from your profile page.
+                      </div>
+                    )}
+                    {guidelineStatus === "idle" && (
+                      <div className="text-sm text-dark-gray">
+                        Waiting for voice analysis to complete...
+                      </div>
+                    )}
                   </div>
 
                   {/* Raw Analysis */}
