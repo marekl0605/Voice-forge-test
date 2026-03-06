@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         .eq("id", project.voice_profile_id)
         .single();
       if (profile) {
-        voiceContext = `\n\n${buildVoiceProfileContext(profile)}`;
+        voiceContext = `\n\n${buildVoiceProfileContext(profile, profile.writing_guideline || undefined)}`;
         voiceTraits = { personality: profile.personality_markers || [], tone: profile.tone || [] };
       }
     }

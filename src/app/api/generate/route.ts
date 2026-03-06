@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         .eq("id", profileIdToUse)
         .single();
       if (profile) {
-        voiceContext = buildVoiceProfileContext(profile);
+        voiceContext = buildVoiceProfileContext(profile, profile.writing_guideline || undefined);
         voiceProfileId = profile.id;
       }
     }

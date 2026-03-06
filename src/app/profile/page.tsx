@@ -13,6 +13,10 @@ import {
   MessageSquare,
   Pencil,
   Check,
+  FileText,
+  Download,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoiceProfile } from "@/lib/types";
@@ -37,6 +41,8 @@ export default function ProfilePage() {
   const [editingName, setEditingName] = useState(false);
   const [nameBuffer, setNameBuffer] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [guidelineLoading, setGuidelineLoading] = useState(false);
+  const [showGuideline, setShowGuideline] = useState(false);
 
   const fetchProfiles = useCallback(async () => {
     const res = await fetch("/api/voice/profile?all=true");
@@ -107,6 +113,38 @@ export default function ProfilePage() {
       setSelectedId(null);
       setProfile(null);
     }
+  };
+
+  const generateGuideline = async () => {
+    if (!profile) return;
+    setGuidelineLoading(true);
+    try {
+      const res = await fetch("/api/voice/guideline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId: profile.id }),
+      });
+      const data = await res.json();
+      if (data.guideline) {
+        setProfile((prev) => prev ? { ...prev, writing_guideline: data.guideline } : prev);
+        setShowGuideline(true);
+      }
+    } catch (err) {
+      console.error("Guideline generation error:", err);
+    } finally {
+      setGuidelineLoading(false);
+    }
+  };
+
+  const downloadGuideline = () => {
+    if (!profile?.writing_guideline) return;
+    const blob = new Blob([profile.writing_guideline], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${profile.name.replace(/\s+/g, "-").toLowerCase()}-writing-guideline.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const removeFromArray = async (field: string, index: number) => {
@@ -546,6 +584,76 @@ export default function ProfilePage() {
                     </ProfileCard>
                   </div>
                 )}
+
+                {/* Writing Guideline - Full Width */}
+                <div className="md:col-span-2">
+                  <div className="bg-forest-light border border-forest-mid rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-mono text-warm-gray uppercase tracking-wider font-medium flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Writing Guideline
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        {profile.writing_guideline && (
+                          <>
+                            <button
+                              onClick={() => setShowGuideline(!showGuideline)}
+                              className="px-3 py-1 rounded text-xs text-mid-gray hover:text-warm-white transition-colors"
+                            >
+                              {showGuideline ? "Hide" : "Show"}
+                            </button>
+                            <button
+                              onClick={downloadGuideline}
+                              className="flex items-center gap-1.5 px-3 py-1 rounded bg-forest text-xs text-mid-gray hover:text-warm-white transition-colors"
+                            >
+                              <Download className="h-3 w-3" /> Download .md
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={generateGuideline}
+                          disabled={guidelineLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime/10 text-lime text-xs font-medium hover:bg-lime/20 transition-colors disabled:opacity-50"
+                        >
+                          {guidelineLoading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-3.5 w-3.5" />
+                              {profile.writing_guideline ? "Regenerate" : "Generate"}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {!profile.writing_guideline && !guidelineLoading && (
+                      <p className="text-sm text-dark-gray">
+                        Generate a comprehensive Personal Brand Style Guide from your voice profile.
+                        This becomes the master ruleset for all AI content generation and a shareable document for your team.
+                      </p>
+                    )}
+
+                    {guidelineLoading && (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="text-center">
+                          <Loader2 className="h-8 w-8 text-lime animate-spin mx-auto mb-3" />
+                          <p className="text-sm text-mid-gray">Generating your Personal Brand Style Guide...</p>
+                          <p className="text-xs text-dark-gray mt-1">This takes about 15-30 seconds</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {profile.writing_guideline && showGuideline && !guidelineLoading && (
+                      <div className="prose prose-invert prose-sm max-w-none mt-4 text-warm-gray leading-relaxed whitespace-pre-wrap border-t border-forest-mid pt-4">
+                        {profile.writing_guideline}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {saving && (

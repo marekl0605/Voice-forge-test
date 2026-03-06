@@ -19,6 +19,7 @@ export interface VoiceProfile {
   personality_markers: string[];
   writing_samples: string[];
   raw_analysis: string;
+  writing_guideline?: string;
   created_at: string;
   updated_at: string;
 }
