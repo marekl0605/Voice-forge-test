@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.36",
+    "@ai-sdk/openai-compatible": "^2.0.35",
     "@ai-sdk/react": "^3.0.105",
     "@eslint/eslintrc": "^3.3.4",
     "@supabase/supabase-js": "^2.98.0",
